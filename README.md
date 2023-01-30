@@ -1,2 +1,1 @@
 # Guided-Diffusion
-Hi
