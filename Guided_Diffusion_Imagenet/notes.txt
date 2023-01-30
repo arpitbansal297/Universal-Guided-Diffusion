@@ -1,0 +1,104 @@
+
+this fit the data 97.5
+MODEL_FLAGS="--attention_resolutions 32,16,8 --class_cond True --diffusion_steps 1000 --dropout 0.1 --image_size 64 --learn_sigma True --noise_schedule cosine --num_channels 192 --num_head_channels 64 --num_res_blocks 3 --resblock_updown True --use_new_attention_order True --use_fp16 False --use_scale_shift_norm True"
+PYTHONPATH=. python membership/membership_classification.py $MODEL_FLAGS --classifier_scale 1.0 --classifier_path models/64x64_classifier.pt --classifier_depth 4 --model_path models/64x64_diffusion.pt $SAMPLE_FLAGS --batch_size 32 --max_time 400 --direct --lr 0.001 --test_every 5
+
+
+
+epoch 45 begins:
+train loss: 0.0623, train acc: 0.9342 - 0781 / 0782
+Final train acc is 0.9342
+test loss: 2.2249, test acc: 0.5000 - 0781 / 0782
+Final test acc is 0.5000
+saving checkpoint...
+done
+epoch 46 begins:
+train loss: 0.1756, train acc: 0.9377 - 0781 / 0782
+Final train acc is 0.9377
+saving checkpoint...
+done
+epoch 47 begins:
+train loss: 0.5723, train acc: 0.9411 - 0781 / 0782
+Final train acc is 0.9411
+saving checkpoint...
+done
+epoch 48 begins:
+train loss: 0.7238, train acc: 0.9440 - 0781 / 0782
+Final train acc is 0.9440
+saving checkpoint...
+done
+epoch 49 begins:
+train loss: 0.4427, train acc: 0.9560 - 0781 / 0782
+Final train acc is 0.9560
+saving checkpoint...
+done
+epoch 50 begins:
+train loss: 0.0041, train acc: 0.9429 - 0781 / 0782
+Final train acc is 0.9429
+test loss: 2.8717, test acc: 0.5000 - 0781 / 0782
+Final test acc is 0.5000
+saving checkpoint...
+done
+epoch 51 begins:
+train loss: 0.0942, train acc: 0.9559 - 0781 / 0782
+Final train acc is 0.9559
+saving checkpoint...
+done
+epoch 52 begins:
+train loss: 1.1791, train acc: 0.9505 - 0781 / 0782
+Final train acc is 0.9505
+saving checkpoint...
+done
+epoch 53 begins:
+train loss: 0.6346, train acc: 0.9504 - 0781 / 0782
+Final train acc is 0.9504
+saving checkpoint...
+done
+epoch 54 begins:
+train loss: 0.4295, train acc: 0.9531 - 0781 / 0782
+Final train acc is 0.9531
+saving checkpoint...
+done
+epoch 55 begins:
+train loss: 1.8634, train acc: 0.9544 - 0781 / 0782
+Final train acc is 0.9544
+test loss: 1.9329, test acc: 0.5000 - 0781 / 0782
+Final test acc is 0.5000
+saving checkpoint...
+done
+epoch 56 begins:
+train loss: 2.4693, train acc: 0.9666 - 0781 / 0782
+Final train acc is 0.9666
+saving checkpoint...
+done
+epoch 57 begins:
+train loss: 0.0189, train acc: 0.9691 - 0781 / 0782
+Final train acc is 0.9691
+saving checkpoint...
+done
+epoch 58 begins:
+train loss: 1.1181, train acc: 0.9628 - 0781 / 0782
+Final train acc is 0.9628
+saving checkpoint...
+done
+epoch 59 begins:
+train loss: 0.6258, train acc: 0.9769 - 0781 / 0782
+Final train acc is 0.9769
+saving checkpoint...
+done
+epoch 60 begins:
+train loss: 0.0000, train acc: 0.9646 - 0781 / 0782
+Final train acc is 0.9646
+test loss: 3.1347, test acc: 0.5000 - 0781 / 0782
+Final test acc is 0.5000
+saving checkpoint...
+done
+epoch 61 begins:
+train loss: 0.0632, train acc: 0.9749 - 0781 / 0782
+Final train acc is 0.9749
+saving checkpoint...
+done
+epoch 62 begins:
+train loss: 1.6319, train acc: 0.9756 - 0781 / 0782
+Final train acc is 0.9756
+saving checkpoint.
