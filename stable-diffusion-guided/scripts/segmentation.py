@@ -217,7 +217,7 @@ def mse_loss(input, target):
     return loss.mean(dim=[1, 2, 3]) * m_sum
 
 def CrossEntropyLoss(logit, target):
-    target = target[-1]
+    target = target
     criterion = nn.CrossEntropyLoss(reduce=False, ignore_index=255).cuda()
     loss = criterion(logit, target.long())
 
@@ -242,13 +242,11 @@ def get_optimation_details(args):
     operation = OptimizerDetails()
 
     operation.num_steps = args.optim_num_steps
-    operation.operation_func = None
-    operation.other_guidance_func = operation_func
+    operation.operation_func = operation_func
 
     operation.optimizer = 'Adam'
     operation.lr = args.optim_lr
-    operation.loss_func = mse_loss
-    operation.other_criterion = CrossEntropyLoss
+    operation.loss_func = CrossEntropyLoss
 
     operation.max_iters = args.optim_max_iters
     operation.loss_cutoff = args.optim_loss_cutoff
@@ -306,50 +304,10 @@ def decode_segmap(label_mask):
     rgb[:, :, 2] = b / 255.0
     return rgb
 
-def get_images(val1, n_samples):
-    take_labels = [i for i in range(153,260)]
-
-    dog_images = []
-    dog_labels = []
-
-    for batch_ind, batch in enumerate(val1):
-        image, label = batch
-        for i in range(label.shape[0]):
-            if label[i] in take_labels:
-                dog_images.append(image[i:i+1])
-                dog_labels.append(label[i:i+1])
-
-                if len(dog_images) == n_samples:
-                    return dog_images, dog_labels
-
 
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument(
-        "--prompt",
-        type=str,
-        nargs="?",
-        default="",
-        help="the prompt to render"
-    )
-    parser.add_argument(
-        "--outdir",
-        type=str,
-        nargs="?",
-        help="dir to write results to",
-        default="outputs/txt2img-samples"
-    )
-    parser.add_argument(
-        "--skip_grid",
-        action='store_true',
-        help="do not save a grid, only individual samples. Helpful when evaluating lots of samples",
-    )
-    parser.add_argument(
-        "--skip_save",
-        action='store_true',
-        help="do not save individual samples. For speed measurements.",
-    )
     parser.add_argument(
         "--ddim_steps",
         type=int,
@@ -357,31 +315,10 @@ def main():
         help="number of ddim sampling steps",
     )
     parser.add_argument(
-        "--plms",
-        action='store_true',
-        help="use plms sampling",
-    )
-    parser.add_argument(
-        "--laion400m",
-        action='store_true',
-        help="uses the LAION400M model",
-    )
-    parser.add_argument(
-        "--fixed_code",
-        action='store_true',
-        help="if enabled, uses the same starting code across samples ",
-    )
-    parser.add_argument(
         "--ddim_eta",
         type=float,
         default=0.0,
         help="ddim eta (eta=0.0 corresponds to deterministic sampling",
-    )
-    parser.add_argument(
-        "--n_iter",
-        type=int,
-        default=2,
-        help="sample this often",
     )
     parser.add_argument(
         "--H",
@@ -408,27 +345,10 @@ def main():
         help="downsampling factor",
     )
     parser.add_argument(
-        "--n_samples",
-        type=int,
-        default=3,
-        help="how many samples to produce for each given prompt. A.k.a. batch size",
-    )
-    parser.add_argument(
-        "--n_rows",
-        type=int,
-        default=0,
-        help="rows in the grid (default: n_samples)",
-    )
-    parser.add_argument(
         "--scale",
         type=float,
         default=7.5,
         help="unconditional guidance scale: eps = eps(x, empty) + scale * (eps(x, cond) - eps(x, empty))",
-    )
-    parser.add_argument(
-        "--from-file",
-        type=str,
-        help="if specified, load prompts from this file",
     )
     parser.add_argument(
         "--config",
@@ -448,13 +368,6 @@ def main():
         default=42,
         help="the seed (for reproducible sampling)",
     )
-    parser.add_argument(
-        "--precision",
-        type=str,
-        help="evaluate at this precision",
-        choices=["full", "autocast"],
-        default="autocast"
-    )
 
     parser.add_argument("--optim_lr", default=1e-2, type=float)
     parser.add_argument('--optim_max_iters', type=int, default=1)
@@ -464,17 +377,16 @@ def main():
     parser.add_argument('--optim_guidance_2', action='store_true', default=False)
     parser.add_argument('--optim_original_guidance', action='store_true', default=False)
     parser.add_argument("--optim_guidance_3_wt", default=5.0, type=float)
-    parser.add_argument('--optim_do_guidance_3_norm', action='store_true', default=False)
     parser.add_argument("--optim_tv_loss", default=None, type=float)
     parser.add_argument('--optim_warm_start', action='store_true', default=False)
     parser.add_argument('--optim_print', action='store_true', default=False)
-    parser.add_argument('--optim_aug', action='store_true', default=False)
     parser.add_argument('--optim_folder', default='./temp/')
     parser.add_argument("--optim_num_steps", nargs="+", default=[1], type=int)
-    parser.add_argument("--optim_mask_fraction", default=0.5, type=float)
-    parser.add_argument("--text", default=None)
     parser.add_argument('--text_type', type=int, default=1)
-    parser.add_argument("--batch_size", default=0, type=int)
+    parser.add_argument("--batch_size", default=1, type=int)
+    parser.add_argument('--seg_folder', default='./data/segmentation_data')
+    parser.add_argument('--special_prompt', default='Walker hound, Walker foxhound')
+    parser.add_argument("--trials", default=10, type=int)
 
 
 
@@ -482,12 +394,6 @@ def main():
 
     results_folder = opt.optim_folder
     create_folder(results_folder)
-
-    if opt.laion400m:
-        print("Falling back to LAION 400M model...")
-        opt.config = "configs/latent-diffusion/txt2img-1p4B-eval.yaml"
-        opt.ckpt = "models/ldm/text2img-large/model.ckpt"
-        opt.outdir = "outputs/txt2img-samples-laion400m"
 
     seed_everything(opt.seed)
 
@@ -499,142 +405,104 @@ def main():
     model = torch.nn.DataParallel(model, device_ids=range(torch.cuda.device_count()))
     model.eval()
 
-
     sampler = DDIMSamplerWithGrad(model)
 
-    os.makedirs(opt.outdir, exist_ok=True)
-    outpath = opt.outdir
-
-    print("Creating invisible watermark encoder (see https://github.com/ShieldMnt/invisible-watermark)...")
-    wm = "StableDiffusionV1"
-    wm_encoder = WatermarkEncoder()
-    wm_encoder.set_watermark('bytes', wm.encode('utf-8'))
-
-    batch_size = opt.n_samples
-    n_rows = opt.n_rows if opt.n_rows > 0 else batch_size
-
-    sample_path = os.path.join(outpath, "samples")
-    os.makedirs(sample_path, exist_ok=True)
-    base_count = len(os.listdir(sample_path))
-    grid_count = len(os.listdir(outpath)) - 1
-
-
-
     operation = get_optimation_details(opt)
+
+    image_size = 256
+    transform = transforms.Compose([
+        transforms.CenterCrop(image_size),
+        transforms.ToTensor(),
+        transforms.Lambda(lambda t: (t * 2) - 1)
+    ])
+
+    batch_size = opt.batch_size
+
+    ds = ImageFolder(root=opt.seg_folder, transform=transform)
+    dl = data.DataLoader(ds, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=16,
+                         drop_last=True)
+
+    print(len(dl))
+
     torch.set_grad_enabled(False)
 
     prompt = get_seg_text(opt.text_type)
     print(prompt)
 
-    print('loading the dataset...')
-    train_dataset, val_dataset = get_train_val_datasets(batch_size)
-    print('done')
-    print('splitting the dataset...')
-    base = '/cmlscratch/bansal01/fall_2022/Guided_Diffusion_Imagenet/'
-    train1, train2 = get_splitted_dataset(dataset=train_dataset,
-                                          checkpoint_path=base + 'checkpoints/non_equal_split/partitions_train.pt')
-    val1, val2 = get_splitted_dataset(dataset=val_dataset,
-                                      checkpoint_path=base + 'checkpoints/non_equal_split/partitions_val.pt')
-    print('done')
-    train1, train2 = get_loader_from_dataset(batch_size, train1, True), get_loader_from_dataset(batch_size, train2, False)
-    val1, val2 = get_loader_from_dataset(batch_size, val1, True), get_loader_from_dataset(batch_size, val2, False)
+    for n, d in enumerate(dl, 0):
 
-    dog_images, dog_labels = get_images(val1, opt.n_iter * batch_size)
-    dog_images = torch.concat(dog_images, dim=0)
-    dog_labels = torch.concat(dog_labels, dim=0)
+        image, _ = d
+        image = image.cuda()
 
-    with open(base + 'imagenet1000_clsidx_to_labels.txt', 'r') as inf:
-        dict_from_file = eval(inf.read())
+        final_prompt = opt.special_prompt + prompt
+        print(final_prompt)
 
-    for n in trange(opt.n_iter, desc="Sampling"):
+        with torch.no_grad():
+            map = operation.operation_func(image).softmax(dim=1)
 
-        if n==5:
-            start = n * batch_size
-            end = n * batch_size + batch_size
+            target_np = map.data.cpu().numpy()
+            target_np = np.argmax(target_np, axis=1)
 
-            print(start, end)
+            old_map = torch.clone(map)
+            num_class = map.shape[1]
+            print(map.shape)
+            #
+            max_vals, max_indices = torch.max(map, 1)
+            print(max_indices.shape)
+            map = max_indices
 
-            image, label = dog_images[start: end], dog_labels[start: end]
-            image, label = image.cuda(), label.cuda()
-            print(label)
+            sep_map = F.one_hot(map, num_classes=num_class)
+            sep_map = sep_map.permute(0, 3, 1, 2).float()
+            print(sep_map.shape)
 
-            p1 = dict_from_file[label.cpu().numpy()[0]]
-            final_prompt = p1 + prompt
-            print(p1)
+        label_save = decode_seg_map_sequence(torch.squeeze(map, 1).detach(
+        ).cpu().numpy())
+
+        utils.save_image(label_save, f'{results_folder}/label_{n}.png')
+        utils.save_image((image + 1) * 0.5, f'{results_folder}/og_img_{n}.png')
+
+
+        uc = None
+        if opt.scale != 1.0:
+            uc = model.module.get_learned_conditioning(batch_size * [""])
+        c = model.module.get_learned_conditioning([final_prompt])
+        for multiple_tries in range(opt.trials):
+            shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
+            samples_ddim, start_zt = sampler.sample(S=opt.ddim_steps,
+                                             conditioning=c,
+                                             batch_size=batch_size,
+                                             shape=shape,
+                                             verbose=False,
+                                             unconditional_guidance_scale=opt.scale,
+                                             unconditional_conditioning=uc,
+                                             eta=opt.ddim_eta,
+                                             operated_image=map,
+                                             operation=operation)
+
+            x_samples_ddim = model.module.decode_first_stage(samples_ddim)
+            x_samples_ddim_unnorm = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
+
+            utils.save_image(x_samples_ddim_unnorm, f'{results_folder}/new_img_{n}_{multiple_tries}.png')
 
             with torch.no_grad():
-                map = operation.other_guidance_func(image).softmax(dim=1)
+                new_map = operation.operation_func(x_samples_ddim)
 
-                target_np = map.data.cpu().numpy()
-                target_np = np.argmax(target_np, axis=1)
+                pred = new_map.data.cpu().numpy()
+                pred = np.argmax(pred, axis=1)
 
-                old_map = torch.clone(map)
-                num_class = map.shape[1]
-                print(map.shape)
-                #
-                max_vals, max_indices = torch.max(map, 1)
-                print(max_indices.shape)
-                map = max_indices
+                new_image_map = new_map.softmax(dim=1)
+                num_class = new_map.shape[1]
 
-                sep_map = F.one_hot(map, num_classes=num_class)
-                sep_map = sep_map.permute(0, 3, 1, 2).float()
-                print(sep_map.shape)
+                max_vals, max_indices = torch.max(new_image_map, 1)
+                new_image_map = max_indices
 
-            label_save = decode_seg_map_sequence(torch.squeeze(map, 1).detach(
+            new_image_map_save = decode_seg_map_sequence(torch.squeeze(new_image_map, 1).detach(
             ).cpu().numpy())
 
-            utils.save_image(label_save, f'{results_folder}/label_{n}.png')
-            utils.save_image((image + 1) * 0.5, f'{results_folder}/og_img_{n}.png')
+            utils.save_image(new_image_map_save, f'{results_folder}/new_image_map_save_{n}_{multiple_tries}.png')
 
-            mask = sep_map[:, 0:1, :, :]
-            mask = TF.resize(mask, (256, 256), interpolation=TF.InterpolationMode.BILINEAR)
-            image_mask = image * mask
-
-            utils.save_image(mask, f'{results_folder}/mask_{n}.png')
-            utils.save_image((image_mask + 1) * 0.5, f'{results_folder}/image_mask_{n}.png')
-
-            uc = None
-            if opt.scale != 1.0:
-                uc = model.module.get_learned_conditioning(batch_size * [""])
-            c = model.module.get_learned_conditioning([final_prompt])
-
-            for multiple_tries in range(2):
-                shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
-                samples_ddim, start_zt = sampler.sample(S=opt.ddim_steps,
-                                                 conditioning=c,
-                                                 batch_size=opt.n_samples,
-                                                 shape=shape,
-                                                 verbose=False,
-                                                 unconditional_guidance_scale=opt.scale,
-                                                 unconditional_conditioning=uc,
-                                                 eta=opt.ddim_eta,
-                                                 operated_image=[image_mask, mask, map],
-                                                 operation=operation)
-
-                x_samples_ddim = model.module.decode_first_stage(samples_ddim)
-                x_samples_ddim_unnorm = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
-
-                utils.save_image(x_samples_ddim_unnorm, f'{results_folder}/new_img_{n}_{multiple_tries}.png')
-
-                with torch.no_grad():
-                    new_map = operation.other_guidance_func(x_samples_ddim)
-
-                    pred = new_map.data.cpu().numpy()
-                    pred = np.argmax(pred, axis=1)
-
-                    new_image_map = new_map.softmax(dim=1)
-                    num_class = new_map.shape[1]
-
-                    max_vals, max_indices = torch.max(new_image_map, 1)
-                    new_image_map = max_indices
-
-                new_image_map_save = decode_seg_map_sequence(torch.squeeze(new_image_map, 1).detach(
-                ).cpu().numpy())
-
-                utils.save_image(new_image_map_save, f'{results_folder}/new_image_map_save_{n}_{multiple_tries}.png')
-
-                print(target_np.shape, pred.shape)
-                torch.save(start_zt, f'{results_folder}/start_zt_{n}_{multiple_tries}.pt')
+            print(target_np.shape, pred.shape)
+            torch.save(start_zt, f'{results_folder}/start_zt_{n}_{multiple_tries}.pt')
 
 
 

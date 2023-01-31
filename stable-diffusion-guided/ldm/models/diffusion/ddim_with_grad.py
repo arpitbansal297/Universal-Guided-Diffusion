@@ -117,21 +117,12 @@ class DDIMSamplerWithGrad(object):
             sqrt_one_minus_at = torch.full((b, 1, 1, 1), sqrt_one_minus_alphas[index], device=device)
 
             beta_t = a_t / a_prev
-
-            # num_step_length = len(operation.num_steps)
-            # index_n = int(num_step_length * (ts[0] / self.num_timesteps))
-            # num_steps = operation.num_steps[index_n]
             num_steps = operation.num_steps[0]
-
-            loss = None
-            _ = None
 
             operation_func = operation.operation_func
             other_guidance_func = operation.other_guidance_func
             criterion = operation.loss_func
             other_criterion = operation.other_criterion
-            max_iters = operation.max_iters
-            loss_cutoff = operation.loss_cutoff
 
             for j in range(num_steps):
 
@@ -187,7 +178,6 @@ class DDIMSamplerWithGrad(object):
 
                     else:
                         e_t = e_t
-
                         img_in = img_in.requires_grad_(False)
 
                         if operation.print:

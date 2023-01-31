@@ -288,31 +288,6 @@ def get_optimation_details(args):
 
 def main():
     parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "--prompt",
-        type=str,
-        nargs="?",
-        default="",
-        help="the prompt to render"
-    )
-    parser.add_argument(
-        "--outdir",
-        type=str,
-        nargs="?",
-        help="dir to write results to",
-        default="outputs/txt2img-samples"
-    )
-    parser.add_argument(
-        "--skip_grid",
-        action='store_true',
-        help="do not save a grid, only individual samples. Helpful when evaluating lots of samples",
-    )
-    parser.add_argument(
-        "--skip_save",
-        action='store_true',
-        help="do not save individual samples. For speed measurements.",
-    )
     parser.add_argument(
         "--ddim_steps",
         type=int,
@@ -320,31 +295,10 @@ def main():
         help="number of ddim sampling steps",
     )
     parser.add_argument(
-        "--plms",
-        action='store_true',
-        help="use plms sampling",
-    )
-    parser.add_argument(
-        "--laion400m",
-        action='store_true',
-        help="uses the LAION400M model",
-    )
-    parser.add_argument(
-        "--fixed_code",
-        action='store_true',
-        help="if enabled, uses the same starting code across samples ",
-    )
-    parser.add_argument(
         "--ddim_eta",
         type=float,
         default=0.0,
         help="ddim eta (eta=0.0 corresponds to deterministic sampling",
-    )
-    parser.add_argument(
-        "--n_iter",
-        type=int,
-        default=2,
-        help="sample this often",
     )
     parser.add_argument(
         "--H",
@@ -371,27 +325,10 @@ def main():
         help="downsampling factor",
     )
     parser.add_argument(
-        "--n_samples",
-        type=int,
-        default=3,
-        help="how many samples to produce for each given prompt. A.k.a. batch size",
-    )
-    parser.add_argument(
-        "--n_rows",
-        type=int,
-        default=0,
-        help="rows in the grid (default: n_samples)",
-    )
-    parser.add_argument(
         "--scale",
         type=float,
         default=7.5,
         help="unconditional guidance scale: eps = eps(x, empty) + scale * (eps(x, cond) - eps(x, empty))",
-    )
-    parser.add_argument(
-        "--from-file",
-        type=str,
-        help="if specified, load prompts from this file",
     )
     parser.add_argument(
         "--config",
@@ -411,13 +348,7 @@ def main():
         default=42,
         help="the seed (for reproducible sampling)",
     )
-    parser.add_argument(
-        "--precision",
-        type=str,
-        help="evaluate at this precision",
-        choices=["full", "autocast"],
-        default="autocast"
-    )
+
 
     parser.add_argument("--optim_lr", default=1e-2, type=float)
     parser.add_argument('--optim_max_iters', type=int, default=1)
@@ -427,33 +358,25 @@ def main():
     parser.add_argument('--optim_guidance_2', action='store_true', default=False)
     parser.add_argument('--optim_original_guidance', action='store_true', default=False)
     parser.add_argument("--optim_guidance_3_wt", default=5.0, type=float)
-    parser.add_argument('--optim_do_guidance_3_norm', action='store_true', default=False)
     parser.add_argument("--optim_tv_loss", default=None, type=float)
     parser.add_argument('--optim_warm_start', action='store_true', default=False)
     parser.add_argument('--optim_print', action='store_true', default=False)
-    parser.add_argument('--optim_aug', action='store_true', default=False)
     parser.add_argument('--optim_folder', default='./temp/')
     parser.add_argument("--optim_num_steps", nargs="+", default=[1], type=int)
-    parser.add_argument("--optim_mask_fraction", default=0.5, type=float)
-    parser.add_argument("--text", default=None)
     parser.add_argument('--text_type', type=int, default=1)
-    parser.add_argument("--batches", default=0, type=int)
+    parser.add_argument("--batch_size", default=1, type=int)
+    parser.add_argument('--face_folder', default='./data/face_data')
 
     parser.add_argument('--fr_crop', action='store_true')
     parser.add_argument('--center_face', action='store_true')
+    parser.add_argument("--trials", default=20, type=int)
 
-    parser.add_argument('--image_index', type=int, default=None)
 
 
     opt = parser.parse_args()
     results_folder = opt.optim_folder
     create_folder(results_folder)
 
-    if opt.laion400m:
-        print("Falling back to LAION 400M model...")
-        opt.config = "configs/latent-diffusion/txt2img-1p4B-eval.yaml"
-        opt.ckpt = "models/ldm/text2img-large/model.ckpt"
-        opt.outdir = "outputs/txt2img-samples-laion400m"
 
     seed_everything(opt.seed)
 
@@ -467,25 +390,6 @@ def main():
 
 
     sampler = DDIMSamplerWithGrad(model)
-
-    os.makedirs(opt.outdir, exist_ok=True)
-    outpath = opt.outdir
-
-    print("Creating invisible watermark encoder (see https://github.com/ShieldMnt/invisible-watermark)...")
-    wm = "StableDiffusionV1"
-    wm_encoder = WatermarkEncoder()
-    wm_encoder.set_watermark('bytes', wm.encode('utf-8'))
-
-    batch_size = opt.n_samples
-    n_rows = opt.n_rows if opt.n_rows > 0 else batch_size
-
-    sample_path = os.path.join(outpath, "samples")
-    os.makedirs(sample_path, exist_ok=True)
-    base_count = len(os.listdir(sample_path))
-    grid_count = len(os.listdir(outpath)) - 1
-
-
-
     operation = get_optimation_details(opt)
 
     image_size = 256
@@ -494,9 +398,13 @@ def main():
         transforms.ToTensor(),
         transforms.Lambda(lambda t: (t * 2) - 1)
     ])
-    ds = ImageFolder(root='/cmlscratch/hmchu/datasets/celeba_hq_256/', transform=transform)
-    dl = cycle_cat(data.DataLoader(ds, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=16,
-                                   drop_last=True))
+
+    batch_size = opt.batch_size
+
+    ds = ImageFolder(root=opt.face_folder, transform=transform)
+    dl = data.DataLoader(ds, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=16,
+                                   drop_last=True)
+
 
     torch.set_grad_enabled(False)
 
@@ -504,22 +412,11 @@ def main():
     print(prompt)
 
 
-        # with model.module.ema_scope():
-    tic = time.time()
-    all_samples = list()
-
-    for n in trange(opt.n_iter, desc="Sampling"):
-
-        if opt.image_index is None:
-            og_img = next(dl).cuda()
-            temp = (og_img + 1) * 0.5
-            utils.save_image(temp, f'{results_folder}/og_img_{n}.png')
-        else:
-            for i in range(opt.image_index + 1):
-                og_img = next(dl).cuda()
-                temp = (og_img + 1) * 0.5
-                utils.save_image(temp, f'{results_folder}/og_img_{n}.png')
-                n+=1
+    for n, d in enumerate(dl, 0):
+        og_img, _ = d
+        og_img = og_img.cuda()
+        temp = (og_img + 1) * 0.5
+        utils.save_image(temp, f'{results_folder}/og_img_{n}.png')
 
         with torch.no_grad():
             og_img_guide, og_img_mask = operation.operation_func(og_img, return_faces=True, mtcnn_face=True)
@@ -529,11 +426,11 @@ def main():
         if opt.scale != 1.0:
             uc = model.module.get_learned_conditioning(batch_size * [""])
         c = model.module.get_learned_conditioning([prompt])
-        for multiple_tries in range(30):
+        for multiple_tries in range(opt.trials):
             shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
             samples_ddim, start_zt = sampler.sample(S=opt.ddim_steps,
                                              conditioning=c,
-                                             batch_size=opt.n_samples,
+                                             batch_size=batch_size,
                                              shape=shape,
                                              verbose=False,
                                              unconditional_guidance_scale=opt.scale,
