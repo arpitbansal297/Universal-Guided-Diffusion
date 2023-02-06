@@ -671,7 +671,9 @@ class GaussianDiffusion:
                     else:
                         op_im = pred_xstart
 
-                    if other_criterion != None:
+                    if hasattr(operation_func.module, 'cal_loss'):
+                        selected = -1 * operation_func.module.cal_loss(pred_xstart, operated_image).unsqueeze(0)
+                    elif other_criterion != None:
                         selected = -1 * other_criterion(op_im, operated_image)
                     else:
                         selected = -1 * criterion(op_im, operated_image)
@@ -751,7 +753,12 @@ class GaussianDiffusion:
                 else:
                     op_im = x0
 
-                loss = criterion(op_im, operated_image)
+                if hasattr(operation_func.module, 'cal_loss'):
+                    tmp_loss = operation_func.module.cal_loss(x0, operated_image)
+                    loss = tmp_loss.unsqueeze(0)
+                    #loss = -1 * tmp_loss.unsqueeze(0)
+                else:
+                    loss = criterion(op_im, operated_image)
 
                 for __ in range(loss.shape[0]):
                     if loss[__] < loss_cutoff:
