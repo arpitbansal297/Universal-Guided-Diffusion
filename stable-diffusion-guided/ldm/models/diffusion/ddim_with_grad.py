@@ -152,7 +152,9 @@ class DDIMSamplerWithGrad(object):
                         op_im = recons_image
 
                     if op_im is not None:
-                        if other_criterion != None:
+                        if hasattr(operation_func, 'cal_loss'):
+                            selected = -1 * operation_func.cal_loss(recons_image, operated_image).unsqueeze(0)
+                        elif other_criterion != None:
                             selected = -1 * other_criterion(op_im, operated_image)
                         else:
                             selected = -1 * criterion(op_im, operated_image)
@@ -321,7 +323,9 @@ class DDIMSamplerWithGrad(object):
                         op_im = recons_image
 
                     if op_im is not None:
-                        if other_criterion != None:
+                        if hasattr(operation_func, 'cal_loss'):
+                            selected = -1 * operation_func.cal_loss(recons_image, operated_image).unsqueeze(0)
+                        elif other_criterion != None:
                             selected = -1 * other_criterion(op_im, operated_image)
                         else:
                             selected = -1 * criterion(op_im, operated_image)
