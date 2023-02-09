@@ -150,7 +150,7 @@ def get_optimation_details(args):
     operation.guidance_2 = args.optim_guidance_2
 
     operation.optim_guidance_3_wt = args.optim_guidance_3_wt
-    operation.original_guidance = args.optim_original_guidance
+    operation.original_guidance = args.optim_original_conditioning
 
     operation.warm_start = args.optim_warm_start
     operation.print = args.optim_print
@@ -235,7 +235,7 @@ def main():
     parser.add_argument("--optim_loss_cutoff", default=0.00001, type=float)
     parser.add_argument('--optim_guidance_3', action='store_true', default=False)
     parser.add_argument('--optim_guidance_2', action='store_true', default=False)
-    parser.add_argument('--optim_original_guidance', action='store_true', default=False)
+    parser.add_argument('--optim_original_conditioning', action='store_true', default=False)
     parser.add_argument("--optim_guidance_3_wt", default=5.0, type=float)
     parser.add_argument('--optim_do_guidance_3_norm', action='store_true', default=False)
     parser.add_argument("--optim_tv_loss", default=None, type=float)
@@ -270,13 +270,6 @@ def main():
     assert batch_size == 1
 
     operation = get_optimation_details(opt)
-
-    image_size = 256
-    transform = transforms.Compose([
-        transforms.CenterCrop(image_size),
-        transforms.ToTensor(),
-        transforms.Lambda(lambda t: (t * 2) - 1)
-    ])
 
     torch.set_grad_enabled(False)
 

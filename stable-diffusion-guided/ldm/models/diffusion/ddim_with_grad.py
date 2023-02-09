@@ -159,8 +159,8 @@ class DDIMSamplerWithGrad(object):
                         else:
                             selected = -1 * criterion(op_im, operated_image)
 
-                        print(ts)
-                        print(selected)
+                        # print(ts)
+                        # print(selected)
 
                         grad = torch.autograd.grad(selected.sum(), img_in)[0]
                         grad = grad * operation.optim_guidance_3_wt

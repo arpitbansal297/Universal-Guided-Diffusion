@@ -84,7 +84,7 @@ parser.add_argument("--optim_lr", default=1e-2, type=float)
 parser.add_argument('--optim_max_iters', type=int, default=1)
 parser.add_argument("--optim_loss_cutoff", default=0.00001, type=float)
 parser.add_argument('--optim_guidance_3', action='store_true', default=False)
-parser.add_argument('--optim_original_guidance', action='store_true', default=False)
+parser.add_argument('--optim_original_conditioning', action='store_true', default=False)
 parser.add_argument("--optim_guidance_3_wt", default=2.0, type=float)
 parser.add_argument("--optim_tv_loss", default=None, type=float)
 parser.add_argument('--optim_warm_start', action='store_true', default=False)
@@ -159,7 +159,7 @@ operation.loss_cutoff = args.optim_loss_cutoff #0.00001
 operation.tv_loss = args.optim_tv_loss
 
 operation.guidance_3 = args.optim_guidance_3 #True
-operation.original_guidance = args.optim_original_guidance
+operation.original_guidance = args.optim_original_conditioning
 operation.mask_type = args.optim_mask_type
 
 operation.optim_guidance_3_wt = args.optim_guidance_3_wt

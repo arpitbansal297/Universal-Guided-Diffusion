@@ -217,7 +217,7 @@ def get_optimation_details(args):
     operation.guidance_3 = args.optim_guidance_3
     operation.guidance_2 = args.optim_guidance_2
 
-    operation.original_guidance = args.optim_original_guidance
+    operation.original_guidance = args.optim_original_conditioning
     operation.mask_type = args.optim_mask_type
 
     operation.optim_guidance_3_wt = args.optim_guidance_3_wt
@@ -336,7 +336,7 @@ def main():
     parser.add_argument("--optim_loss_cutoff", default=0.00001, type=float)
     parser.add_argument('--optim_guidance_3', action='store_true', default=False)
     parser.add_argument('--optim_guidance_2', action='store_true', default=False)
-    parser.add_argument('--optim_original_guidance', action='store_true', default=False)
+    parser.add_argument('--optim_original_conditioning', action='store_true', default=False)
     parser.add_argument("--optim_guidance_3_wt", default=5.0, type=float)
     parser.add_argument('--optim_do_guidance_3_norm', action='store_true', default=False)
     parser.add_argument("--optim_tv_loss", default=None, type=float)

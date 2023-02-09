@@ -183,7 +183,6 @@ class FaceRecognition(nn.Module):
                 box = [48, 48, 208, 208]
                 crop_face = img[None, :, box[1]:box[3], box[0]:box[2]]
             elif batch_boxes[i] is not None:
-                print("Face Found")
                 box = batch_boxes[i][0]
                 margin = [
                     self.mtcnn.margin * (box[2] - box[0]) / (self.output_size - self.mtcnn.margin),
@@ -198,7 +197,6 @@ class FaceRecognition(nn.Module):
                 ]
                 crop_face = img[None, :, box[1]:box[3], box[0]:box[2]]
             else:
-                print("Face Not Found")
                 # crop_face = img[None, :, :, :]
                 return None
 
@@ -277,7 +275,7 @@ def get_optimation_details(args):
     operation.guidance_2 = args.optim_guidance_2
 
     operation.optim_guidance_3_wt = args.optim_guidance_3_wt
-    operation.original_guidance = args.optim_original_guidance
+    operation.original_guidance = args.optim_original_conditioning
 
     operation.warm_start = args.optim_warm_start
     operation.print = args.optim_print
@@ -356,7 +354,7 @@ def main():
     parser.add_argument("--optim_loss_cutoff", default=0.00001, type=float)
     parser.add_argument('--optim_guidance_3', action='store_true', default=False)
     parser.add_argument('--optim_guidance_2', action='store_true', default=False)
-    parser.add_argument('--optim_original_guidance', action='store_true', default=False)
+    parser.add_argument('--optim_original_conditioning', action='store_true', default=False)
     parser.add_argument("--optim_guidance_3_wt", default=5.0, type=float)
     parser.add_argument("--optim_tv_loss", default=None, type=float)
     parser.add_argument('--optim_warm_start', action='store_true', default=False)
@@ -364,12 +362,14 @@ def main():
     parser.add_argument('--optim_folder', default='./temp/')
     parser.add_argument("--optim_num_steps", nargs="+", default=[1], type=int)
     parser.add_argument('--text_type', type=int, default=1)
+    parser.add_argument("--text", default=None)
     parser.add_argument("--batch_size", default=1, type=int)
     parser.add_argument('--face_folder', default='./data/face_data')
 
     parser.add_argument('--fr_crop', action='store_true')
     parser.add_argument('--center_face', action='store_true')
     parser.add_argument("--trials", default=20, type=int)
+    parser.add_argument("--indexes", nargs="+", default=[0, 1, 2], type=int)
 
 
 
@@ -408,41 +408,46 @@ def main():
 
     torch.set_grad_enabled(False)
 
-    prompt = get_face_text(opt.text_type)
+    if opt.text != None:
+        prompt = opt.text
+    else:
+        prompt = get_face_text(opt.text_type)
+
     print(prompt)
 
 
     for n, d in enumerate(dl, 0):
-        og_img, _ = d
-        og_img = og_img.cuda()
-        temp = (og_img + 1) * 0.5
-        utils.save_image(temp, f'{results_folder}/og_img_{n}.png')
+        if n in opt.indexes:
+            og_img, _ = d
+            og_img = og_img.cuda()
+            temp = (og_img + 1) * 0.5
+            utils.save_image(temp, f'{results_folder}/og_img_{n}.png')
 
-        with torch.no_grad():
-            og_img_guide, og_img_mask = operation.operation_func(og_img, return_faces=True, mtcnn_face=True)
-            utils.save_image((og_img_mask + 1) * 0.5, f'{results_folder}/og_img_cut_{n}.png')
+            with torch.no_grad():
+                og_img_guide, og_img_mask = operation.operation_func(og_img, return_faces=True, mtcnn_face=True)
+                utils.save_image((og_img_mask + 1) * 0.5, f'{results_folder}/og_img_cut_{n}.png')
 
-        uc = None
-        if opt.scale != 1.0:
-            uc = model.module.get_learned_conditioning(batch_size * [""])
-        c = model.module.get_learned_conditioning([prompt])
-        for multiple_tries in range(opt.trials):
-            shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
-            samples_ddim, start_zt = sampler.sample(S=opt.ddim_steps,
-                                             conditioning=c,
-                                             batch_size=batch_size,
-                                             shape=shape,
-                                             verbose=False,
-                                             unconditional_guidance_scale=opt.scale,
-                                             unconditional_conditioning=uc,
-                                             eta=opt.ddim_eta,
-                                             operated_image=og_img_guide,
-                                             operation=operation)
+            uc = None
+            if opt.scale != 1.0:
+                uc = model.module.get_learned_conditioning(batch_size * [""])
+            c = model.module.get_learned_conditioning([prompt])
+            for multiple_tries in range(opt.trials):
+                shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
+                samples_ddim, start_zt = sampler.sample(S=opt.ddim_steps,
+                                                 conditioning=c,
+                                                 batch_size=batch_size,
+                                                 shape=shape,
+                                                 verbose=False,
+                                                 unconditional_guidance_scale=opt.scale,
+                                                 unconditional_conditioning=uc,
+                                                 eta=opt.ddim_eta,
+                                                 operated_image=og_img_guide,
+                                                 operation=operation)
 
-            x_samples_ddim = model.module.decode_first_stage(samples_ddim)
-            x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
+                x_samples_ddim = model.module.decode_first_stage(samples_ddim)
+                x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
 
-            utils.save_image(x_samples_ddim, f'{results_folder}/new_img_{n}_{multiple_tries}.png')
+                utils.save_image(x_samples_ddim, f'{results_folder}/new_img_{n}_{multiple_tries}.png')
 
 
 
