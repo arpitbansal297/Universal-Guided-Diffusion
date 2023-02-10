@@ -95,13 +95,10 @@ Some of the results produced for both the texts are as follows - the first image
 In this we show scripts that can be used to run the experiments for image generation trained on imagenet.
 
 ### Clip guided
-In this one can use the text encoding from clip to guide image generation. This leads to diffusion model generating images which are either out-of-distribution as well.
+In this one can use the text encoding from clip to guide image generation. This leads to diffusion model generating images which are either out-of-distribution as well. Make sure to download the diffusion model from <a href="https://github.com/openai/guided-diffusion">OpenAI's guided diffusion</a>.
 ```
 python Guided/Clip_guided.py --trials 5 --samples_per_diffusion 2 --text "English foxhound by Edward Hopper" --optim_guidance_3 --optim_guidance_3_wt 2.0 --optim_num_steps 10 --optim_folder ./Clip_btd_cake/ --batch_size 8 --attention_resolutions 32,16,8 --class_cond False --diffusion_steps 1000 --image_size 256 --learn_sigma True --noise_schedule linear --num_channels 256 --num_head_channels 64 --num_res_blocks 2 --resblock_updown True --use_fp16 False --use_scale_shift_norm True --model_path <Path to the unconditional diffusion model>
 python Guided/Clip_guided.py --trials 5 --samples_per_diffusion 2 --text "Van Gogh Style" --optim_guidance_3 --optim_guidance_3_wt 5.0 --optim_num_steps 5 --optim_folder ./Clip_btd_cake/ --batch_size 8 --attention_resolutions 32,16,8 --class_cond False --diffusion_steps 1000 --image_size 256 --learn_sigma True --noise_schedule linear --num_channels 256 --num_head_channels 64 --num_res_blocks 2 --resblock_updown True --use_fp16 False --use_scale_shift_norm True --model_path <Path to the unconditional diffusion model>
 python Guided/Clip_guided.py --trials 5 --samples_per_diffusion 2 --text "Birthday Cake" --optim_guidance_3 --optim_guidance_3_wt 2.0 --optim_num_steps 10 --optim_folder ./Clip_btd_cake/ --batch_size 8 --attention_resolutions 32,16,8 --class_cond False --diffusion_steps 1000 --image_size 256 --learn_sigma True --noise_schedule linear --num_channels 256 --num_head_channels 64 --num_res_blocks 2 --resblock_updown True --use_fp16 False --use_scale_shift_norm True --model_path <Path to the unconditional diffusion model>
 ```
 <img src="./Guided_Diffusion_Imagenet/images_readme/imgnet_ood.png" width="1000px"></img>
-
-
-
