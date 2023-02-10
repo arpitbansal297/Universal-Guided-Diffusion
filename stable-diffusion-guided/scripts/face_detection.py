@@ -430,7 +430,7 @@ def main():
             uc = None
             if opt.scale != 1.0:
                 uc = model.module.get_learned_conditioning(batch_size * [""])
-            c = model.module.get_learned_conditioning([prompt])
+            c = model.module.get_learned_conditioning(batch_size * [prompt])
             for multiple_tries in range(opt.trials):
                 shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
                 samples_ddim, start_zt = sampler.sample(S=opt.ddim_steps,

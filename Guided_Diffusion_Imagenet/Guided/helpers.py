@@ -68,14 +68,18 @@ def get_model_diffusion_classifier(args):
     model.eval()
     model.requires_grad_(False)
     model = torch.nn.DataParallel(model).cuda()
-    print("loading classifier...")
-    classifier = create_classifier(**args_to_dict(args, classifier_defaults().keys()))
-    classifier_checkpoint = torch.load(args.classifier_path)
-    classifier.load_state_dict(classifier_checkpoint)
-    print('done')
-    classifier.eval()
-    classifier.requires_grad_(False)
-    classifier = torch.nn.DataParallel(classifier).cuda()
+    if len(args.classifier_path) > 2:
+        print("loading classifier...")
+        classifier = create_classifier(**args_to_dict(args, classifier_defaults().keys()))
+        classifier_checkpoint = torch.load(args.classifier_path)
+        classifier.load_state_dict(classifier_checkpoint)
+        print('done')
+        classifier.eval()
+        classifier.requires_grad_(False)
+        classifier = torch.nn.DataParallel(classifier).cuda()
+    else:
+        classifier = None
+
     return model, diffusion, classifier
 
 

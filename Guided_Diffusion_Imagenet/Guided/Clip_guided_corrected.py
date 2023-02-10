@@ -1,16 +1,45 @@
+
+import numpy as np
+import random
+import os
+import cv2
+
 import sys
 sys.path.append('./')
 
+### For visualizing the outputs ###
+import torch
+from torch.utils.data import Dataset, DataLoader
+from torchvision import io, transforms, utils
 import torchvision.transforms.functional as TF
+from tqdm.auto import tqdm
+from torchvision.io.image import read_image
+from torchvision.models.segmentation import DeepLabV3_ResNet101_Weights, deeplabv3_resnet101, lraspp_mobilenet_v3_large, LRASPP_MobileNet_V3_Large_Weights
+from torchvision.transforms.functional import to_pil_image
+from pathlib import Path
+import random
+from typing import Any, Callable, List, Optional, Tuple
+import torch.optim as optim
 from torch import nn, einsum
+from torch.autograd import Variable
 
 import torch
 import torch.utils.data
+
+from Guided.dataset.helpers import get_splitted_dataset
 from Guided.helpers import get_parser, Operation, OptimizerDetails
+from Guided.models.resnet import ResNet18_64x64, ResNet18_64x64_1, ResNet18_256x256
+from scripts.imagenet import get_loader_from_dataset, get_train_val_datasets
+import cv2
+
+import torchvision
 import cv2
 from torchvision import transforms, utils
+from torch.utils import data
+import torch.nn.functional as F
 import os
 import errno
+import shutil
 import clip
 
 
@@ -50,19 +79,22 @@ parser.add_argument('--wandb', type=int, default=1)
 parser.add_argument('--input_size', type=int, default=64)
 
 parser.add_argument("--optim_lr", default=1e-2, type=float)
-parser.add_argument('--optim_max_iters', type=int, default=0)
+parser.add_argument('--optim_max_iters', type=int, default=1)
+parser.add_argument('--optim_mask_type', type=int, default=1)
 parser.add_argument("--optim_loss_cutoff", default=0.00001, type=float)
 parser.add_argument('--optim_guidance_3', action='store_true', default=False)
-parser.add_argument('--optim_original_conditioning', action='store_true', default=False)
+parser.add_argument('--optim_original_guidance', action='store_true', default=False)
 parser.add_argument("--optim_guidance_3_wt", default=2.0, type=float)
+parser.add_argument('--optim_do_guidance_3_norm', action='store_true', default=False)
 parser.add_argument("--optim_tv_loss", default=None, type=float)
 parser.add_argument('--optim_warm_start', action='store_true', default=False)
 parser.add_argument('--optim_print', action='store_true', default=False)
+parser.add_argument('--optim_aug', action='store_true', default=False)
 parser.add_argument('--optim_folder', default='./temp/')
 parser.add_argument("--optim_num_steps", nargs="+", default=[1], type=int)
-parser.add_argument("--text", default="van gogh style", type=str)
-parser.add_argument("--trials", default=10, type=int)
-parser.add_argument("--samples_per_diffusion", default=4, type=int)
+parser.add_argument("--optim_mask_fraction", default=0.5, type=float)
+parser.add_argument("--text_type", default=None, type=int)
+parser.add_argument("--batches", default=10, type=int)
 
 
 args = parser.parse_args()
@@ -128,16 +160,23 @@ operation.loss_cutoff = args.optim_loss_cutoff #0.00001
 operation.tv_loss = args.optim_tv_loss
 
 operation.guidance_3 = args.optim_guidance_3 #True
-operation.original_guidance = args.optim_original_conditioning
+operation.original_guidance = args.optim_original_guidance
+operation.mask_type = args.optim_mask_type
 
 operation.optim_guidance_3_wt = args.optim_guidance_3_wt
+operation.do_guidance_3_norm = args.optim_do_guidance_3_norm
 
 operation.warm_start = args.optim_warm_start #False
 operation.print = args.optim_print
 operation.print_every = 500
 operation.folder = results_folder
+if args.optim_aug:
+    operation.Aug = pre
 
-operator = Operation(args, operation=operation, shape=[args.samples_per_diffusion, 3, 256, 256], progressive=True)
+
+# operation = [2, operation_func, optim.Adam, 0.001, nn.MSELoss(), 1000, 0.001]
+
+operator = Operation(args, operation=operation, shape=[BATCH_SIZE, 3, 256, 256], progressive=True)
 cnt = 0
 
 def return_cv2(img, path):
@@ -148,17 +187,96 @@ def return_cv2(img, path):
     img = cv2.copyMakeBorder(img, 10, 10, 10, 10, cv2.BORDER_CONSTANT, value=black)
     return img
 
+print('loading the dataset...')
+train_dataset, val_dataset = get_train_val_datasets(args)
+print('done')
+print('splitting the dataset...')
+val1, val2 = get_splitted_dataset(dataset=val_dataset, checkpoint_path='checkpoints/partitions_val.pt')
+print('done')
+val1, val2 = get_loader_from_dataset(args, val1, True), get_loader_from_dataset(args, val2, False)
 
-for trial in range(args.trials + 1):
+
+with open('imagenet1000_clsidx_to_labels.txt','r') as inf:
+    dict_from_file = eval(inf.read())
+
+
+take_labels = [i for i in range(153,260)]
+
+
+
+dog_images = []
+dog_labels = []
+
+for batch_ind, batch in enumerate(val1):
+    image, label = batch
+    for i in range(label.shape[0]):
+        if label[i] in take_labels:
+            dog_images.append(image[i:i+1])
+            dog_labels.append(label[i:i+1])
+
+    if len(dog_images) == BATCH_SIZE:
+        break
+
+
+dog_images = torch.concat(dog_images, dim=0)
+dog_labels = torch.concat(dog_labels, dim=0)
+
+
+
+for batch_ind in range(args.batches + 1):
+
+    image, label = dog_images, dog_labels
+    image, label = image.cuda(), label.cuda()
+
     text = []
-    for b in range(args.samples_per_diffusion):
-        text.append(args.text)
+    label_np = label.cpu().numpy()
+    for l in label_np:
+        if args.text_type == 1:
+            text.append(f'van gogh style')
+        elif args.text_type == 2:
+            text.append(f'{dict_from_file[l]} in van gogh style')
+        elif args.text_type == 3:
+            text.append(f'{dict_from_file[l]} drinking water')
+        elif args.text_type == 4:
+            text.append(f'{dict_from_file[l]} in forest')
+        elif args.text_type == 5:
+            text.append(f'{dict_from_file[l]} under water')
+        elif args.text_type == 6:
+            text.append(f'{dict_from_file[l]} in desert')
+        elif args.text_type == 7:
+            text.append(f'{dict_from_file[l]} as cartoon')
+        elif args.text_type == 8:
+            text.append(f'{dict_from_file[l]} as pilot')
+        elif args.text_type == 9:
+            text.append(f'{dict_from_file[l]} scuba-diving')
+        elif args.text_type == 10:
+            text.append(f'{dict_from_file[l]} by Edward Hopper')
+        elif args.text_type == 11:
+            text.append(f'{dict_from_file[l]} in Cubism style')
+        elif args.text_type == 12:
+            text.append(f'{dict_from_file[l]} as a sketch')
+        elif args.text_type == 13:
+            text.append(f'Dog scuba-diving')
+        elif args.text_type == 14:
+            text.append(f'Cake')
+        elif args.text_type == 15:
+            text.append(f'Birthday Cake')
+        else:
+            text.append(dict_from_file[l])
+        # text.append(dict_from_file[l])
+        # text.append(f'image of {dict_from_file[l]} in van gogh style')
+        # text.append(f'image in van gogh style')
+
     print(text)
+
     text = clip.tokenize(text).cuda()
 
+    utils.save_image((image + 1) * 0.5, f'{results_folder}/og_img_{batch_ind}.png')
+
     print("Start")
-    output = operator.operator(label=None, operated_image=text)
-    utils.save_image((output + 1) * 0.5, f'{results_folder}/new_img_{trial}.png')
+    output = operator.operator(label=label, operated_image=text)
+    utils.save_image((output + 1) * 0.5, f'{results_folder}/new_img_{batch_ind}.png')
 
-
+    if batch_ind == args.batches:
+        break
 

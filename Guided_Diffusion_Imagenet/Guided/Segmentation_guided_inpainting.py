@@ -90,6 +90,7 @@ parser.add_argument('--optim_folder', default='./temp/')
 parser.add_argument('--optim_sampling_type', default=None)
 parser.add_argument("--optim_num_steps", nargs="+", default=[1], type=int)
 parser.add_argument('--batches', type=int, default=1)
+parser.add_argument('--trials', type=int, default=1)
 
 args = parser.parse_args()
 
@@ -209,16 +210,10 @@ def read_cv2(img, path):
     img = cv2.copyMakeBorder(img, 10, 10, 10, 10, cv2.BORDER_CONSTANT, value=black)
     return img
 
-print('loading the dataset...')
+
 train_dataset, val_dataset = get_train_val_datasets(args)
-print('done')
-print('splitting the dataset...')
-train1, train2 = get_splitted_dataset(dataset=train_dataset,
-                                      checkpoint_path='checkpoints/non_equal_split/partitions_train.pt')
-val1, val2 = get_splitted_dataset(dataset=val_dataset, checkpoint_path='checkpoints/non_equal_split/partitions_val.pt')
-print('done')
-train1, train2 = get_loader_from_dataset(args, train1, True), get_loader_from_dataset(args, train2, False)
-val1, val2 = get_loader_from_dataset(args, val1, True), get_loader_from_dataset(args, val2, False)
+val1, _ = get_splitted_dataset(dataset=val_dataset, checkpoint_path='checkpoints/partitions_val.pt')
+val1 = get_loader_from_dataset(args, val1, True)
 
 def get_pascal_labels():
     """Load the mapping that associates pascal classes with label colors
@@ -285,9 +280,9 @@ dog_labels = torch.concat(dog_labels, dim=0)
 print("All")
 print(dog_images.shape)
 
-evaluator = Evaluator(21)
+# evaluator = Evaluator(21)
 
-for batch_ind in range(10):
+for batch_ind in range(args.batches):
 
     start = batch_ind * BATCH_SIZE
     end = batch_ind * BATCH_SIZE + BATCH_SIZE
@@ -325,63 +320,57 @@ for batch_ind in range(10):
     mask = sep_map[:, 0:1, :, :]
     mask = TF.resize(mask, (256, 256), interpolation=TF.InterpolationMode.BILINEAR)
     operator.operation.guidance_mask = 1 - mask
-
-    # image_mask = TF.resize(image, (520, 520), interpolation=TF.InterpolationMode.BILINEAR)
     image_mask = image * mask
-    # image_mask = TF.resize(image_mask, (256, 256), interpolation=TF.InterpolationMode.BILINEAR)
 
     utils.save_image(mask, f'{results_folder}/mask_{batch_ind}.png')
     utils.save_image((image_mask + 1) * 0.5, f'{results_folder}/image_mask_{batch_ind}.png')
 
-
-    print("Start")
-    output = operator.operator(label=label, operated_image=[image_mask, mask, map])
-    utils.save_image((output + 1) * 0.5, f'{results_folder}/new_img_{batch_ind}.png')
-
-
-    with torch.no_grad():
-        new_map = operation_func(output)
-
-        pred = new_map.data.cpu().numpy()
-        pred = np.argmax(pred, axis=1)
-
-        new_image_map = new_map.softmax(dim=1)
-        num_class = new_map.shape[1]
-
-        max_vals, max_indices = torch.max(new_image_map, 1)
-        new_image_map = max_indices
-
-    new_image_map_save = decode_seg_map_sequence(torch.squeeze(new_image_map, 1).detach(
-    ).cpu().numpy())
-
-    utils.save_image(new_image_map_save, f'{results_folder}/new_image_map_save_{batch_ind}.png')
-
-    print(target_np.shape, pred.shape)
-    evaluator.add_batch(target_np, pred)
-
-    for i in range(image.shape[0]):
-        og_img_ = return_cv2(image[i], f'{results_folder}/og_img.png')
-        label_save_ = read_cv2(label_save[i], f'{results_folder}/label_save.png')
-
-        output_ = return_cv2(output[i], f'{results_folder}/img.png')
-        new_image_map_save_ = read_cv2(new_image_map_save[i], f'{results_folder}/direct_recons.png')
-
-        im_l = cv2.hconcat([og_img_, output_])
-        im_h = cv2.hconcat([label_save_, new_image_map_save_])
-
-        cv2.imwrite(f'{results_folder}/images_{cnt}.png', im_l)
-        cv2.imwrite(f'{results_folder}/map_{cnt}.png', im_h)
-
-        cnt += 1
+    for trials in range(args.trials):
+        print("Start")
+        output = operator.operator(label=label, operated_image=[image_mask, mask, map])
+        utils.save_image((output + 1) * 0.5, f'{results_folder}/new_img_{batch_ind}_trial_{trials}.png')
 
 
-    if batch_ind == 10:
-        break
+        with torch.no_grad():
+            new_map = operation_func(output)
 
-Acc = evaluator.Pixel_Accuracy()
-Acc_class = evaluator.Pixel_Accuracy_Class()
-mIoU = evaluator.Mean_Intersection_over_Union()
-FWIoU = evaluator.Frequency_Weighted_Intersection_over_Union()
+            pred = new_map.data.cpu().numpy()
+            pred = np.argmax(pred, axis=1)
 
-print("Acc:{}, Acc_class:{}, mIoU:{}, fwIoU: {}".format(Acc, Acc_class, mIoU, FWIoU))
+            new_image_map = new_map.softmax(dim=1)
+            num_class = new_map.shape[1]
+
+            max_vals, max_indices = torch.max(new_image_map, 1)
+            new_image_map = max_indices
+
+        new_image_map_save = decode_seg_map_sequence(torch.squeeze(new_image_map, 1).detach(
+        ).cpu().numpy())
+
+        utils.save_image(new_image_map_save, f'{results_folder}/new_image_map_save_{batch_ind}_trial_{trials}.png')
+
+        print(target_np.shape, pred.shape)
+        # evaluator.add_batch(target_np, pred)
+
+        for i in range(image.shape[0]):
+            og_img_ = return_cv2(image[i], f'{results_folder}/og_img_trial_{trials}.png')
+            label_save_ = read_cv2(label_save[i], f'{results_folder}/label_save_trial_{trials}.png')
+
+            output_ = return_cv2(output[i], f'{results_folder}/img.png')
+            new_image_map_save_ = read_cv2(new_image_map_save[i], f'{results_folder}/direct_recons_trial_{trials}.png')
+
+            im_l = cv2.hconcat([og_img_, output_])
+            im_h = cv2.hconcat([label_save_, new_image_map_save_])
+
+            cv2.imwrite(f'{results_folder}/images_{cnt}_trial_{trials}.png', im_l)
+            cv2.imwrite(f'{results_folder}/map_{cnt}_trial_{trials}.png', im_h)
+
+            cnt += 1
+
+
+# Acc = evaluator.Pixel_Accuracy()
+# Acc_class = evaluator.Pixel_Accuracy_Class()
+# mIoU = evaluator.Mean_Intersection_over_Union()
+# FWIoU = evaluator.Frequency_Weighted_Intersection_over_Union()
+#
+# print("Acc:{}, Acc_class:{}, mIoU:{}, fwIoU: {}".format(Acc, Acc_class, mIoU, FWIoU))
 
