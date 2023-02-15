@@ -61,13 +61,14 @@ torch.manual_seed(0)
 parser = get_parser()
 parser.add_argument('--root', default='/fs/cml-datasets/ImageNet/ILSVRC2012')
 parser.add_argument("--partitions_folder", default="/cmlscratch/bansal01/fall_2022/Guided_Diffusion_Imagenet/checkpoints/non_equal_split/")
+#parser.add_argument("--partitions_folder", default="checkpoints/non_equal_split/")
 parser.add_argument('--optimizer', default='adamw', choices=['sgd', 'adamw'])
 parser.add_argument("--optim_lr", default=1e-3, type=float)
-parser.add_argument('--optim_max_iters', type=int, default=1)
+parser.add_argument('--optim_backward_guidance_max_iters', type=int, default=1)
 parser.add_argument("--optim_loss_cutoff", default=0.00001, type=float)
-parser.add_argument('--optim_guidance_3', action='store_true', default=False)
-parser.add_argument('--optim_original_guidance', action='store_true', default=False)
-parser.add_argument("--optim_guidance_3_wt", default=2.0, type=float)
+parser.add_argument('--optim_forward_guidance', action='store_true', default=False)
+parser.add_argument('--optim_original_conditioning', action='store_true', default=False)
+parser.add_argument("--optim_forward_guidance_wt", default=2.0, type=float)
 parser.add_argument('--optim_warm_start', action='store_true', default=False)
 parser.add_argument('--optim_print', action='store_true', default=False)
 parser.add_argument('--optim_aug', action='store_true', default=False)
@@ -75,6 +76,7 @@ parser.add_argument('--optim_folder', default='/cmlscratch/hmchu/guided-diffusio
 parser.add_argument("--optim_num_steps", nargs="+", default=[1], type=int)
 parser.add_argument("--exp_name", default='')
 parser.add_argument("--box_from_sample_image", action='store_true')
+parser.add_argument("--indexes", nargs="+", default=[2, 9, 16, 24, 68, 164, 238], type=int)
 parser.add_argument("--trials", default=10, type=int)
 parser.add_argument("--n_samples", default=10, type=int)
 
@@ -140,12 +142,12 @@ operation.operation_func = operation_func
 operation.optimizer = 'Adam'
 operation.lr = args.optim_lr #0.01
 operation.loss_func = None
-operation.max_iters = args.optim_max_iters #00
+operation.max_iters = args.optim_backward_guidance_max_iters #00
 operation.loss_cutoff = args.optim_loss_cutoff #0.00001
 operation.tv_loss = None
-operation.guidance_3 = args.optim_guidance_3 #True
-operation.original_guidance = args.optim_original_guidance
-operation.optim_guidance_3_wt = args.optim_guidance_3_wt
+operation.guidance_3 = args.optim_forward_guidance #True
+operation.original_guidance = args.optim_original_conditioning
+operation.optim_guidance_3_wt = args.optim_forward_guidance_wt
 operation.warm_start = args.optim_warm_start #False
 operation.print = args.optim_print
 operation.print_every = 5
@@ -165,10 +167,10 @@ def return_cv2(img, path):
     return img
 
 print('loading the dataset...')
-train_dataset, val_dataset = get_train_val_datasets(args)
 print('done')
 print('splitting the dataset...')
 
+train_dataset, val_dataset = get_train_val_datasets(args)
 train_ckpt_path = os.path.join(args.partitions_folder, "partitions_train.pt")
 val_ckpt_path = os.path.join(args.partitions_folder, "partitions_val.pt")
 
@@ -191,24 +193,27 @@ def draw_box(img, pred):
     box = box.float() / 255.0
     return box
 
+print(f"indices of images to compute groun truth based on: {args.indexes}")
 for batch_ind, batch in enumerate(val1):
 
-    if batch_ind == args.n_samples:
+    if batch_ind == args.n_samples - 1:
         break
 
     image, label = batch
     image, label = image.cuda(), label.cuda()
     
-    if args.box_from_sample_image == 1:
-        if batch_ind not in [2, 9, 16, 24, 68, 164, 238]:
-            continue
+    if batch_ind not in args.indexes:
+        continue
 
-    gt_boxes = operation_func(image)
+    print(f'current image index: {batch_ind}')
+    
+    with torch.no_grad():
+        gt_boxes = operation_func(image)
 
     box_image = draw_box(image[0], gt_boxes[0])
     utils.save_image(box_image, f'{results_folder}/box_og_img_{batch_ind}.png')
 
-    for rep in range(trials):
+    for rep in range(args.trials):
         output = operator.operator(label=label, operated_image=gt_boxes)
         gt_box_image = draw_box(output[0], gt_boxes[0])
         utils.save_image(gt_box_image, f'{results_folder}/box_gt_new_img_{batch_ind}_trial_{rep}.png')
