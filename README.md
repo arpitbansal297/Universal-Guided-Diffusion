@@ -76,7 +76,7 @@ Some of the results produced for both the texts are as follows - the first image
 ### Object Detection
 
 In this we generate images conditioned on the text and guided by the bounding boxes of different objects. 
-The following script will take the first sample bounding boxe ib scripts/object_detection.py. The bounding boxes are then used to guide the image generation conditioned on the given text prompt, set by `--text`
+The following script will take the first sample bounding boxe in `scripts/object_detection.py`. The bounding boxes are then used to guide the image generation conditioned on the given text prompt, set by `--text`
 ```
 mkdir test_od
 python scripts/segmentation.py --indexes 0 --text "a headshot of a woman with a dog" --scale 1.5 --optim_forward_guidance --optim_num_steps 5 --optim_forward_guidance_wt 100 --optim_original_conditioning --ddim_steps 250 --optim_folder ./test_od/ --ckpt <Path to stable diffusion model>
