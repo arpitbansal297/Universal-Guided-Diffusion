@@ -214,14 +214,14 @@ def get_optimation_details(args):
     operation.loss_cutoff = args.optim_loss_cutoff
     operation.tv_loss = args.optim_tv_loss
 
-    operation.guidance_3 = args.optim_guidance_3
-    operation.guidance_2 = args.optim_guidance_2
+    operation.guidance_3 = args.optim_forward_guidance
+    operation.guidance_2 = args.optim_backward_guidance
 
     operation.original_guidance = args.optim_original_conditioning
     operation.mask_type = args.optim_mask_type
 
-    operation.optim_guidance_3_wt = args.optim_guidance_3_wt
-    operation.do_guidance_3_norm = args.optim_do_guidance_3_norm
+    operation.optim_guidance_3_wt = args.optim_forward_guidance_wt
+    operation.do_guidance_3_norm = args.optim_do_forward_guidance_norm
 
     operation.warm_start = args.optim_warm_start
     operation.print = args.optim_print
@@ -334,11 +334,11 @@ def main():
     parser.add_argument('--optim_max_iters', type=int, default=1)
     parser.add_argument('--optim_mask_type', type=int, default=1)
     parser.add_argument("--optim_loss_cutoff", default=0.00001, type=float)
-    parser.add_argument('--optim_guidance_3', action='store_true', default=False)
-    parser.add_argument('--optim_guidance_2', action='store_true', default=False)
+    parser.add_argument('--optim_forward_guidance', action='store_true', default=False)
+    parser.add_argument('--optim_backward_guidance', action='store_true', default=False)
     parser.add_argument('--optim_original_conditioning', action='store_true', default=False)
-    parser.add_argument("--optim_guidance_3_wt", default=5.0, type=float)
-    parser.add_argument('--optim_do_guidance_3_norm', action='store_true', default=False)
+    parser.add_argument("--optim_forward_guidance_wt", default=5.0, type=float)
+    parser.add_argument('--optim_do_forward_guidance_norm', action='store_true', default=False)
     parser.add_argument("--optim_tv_loss", default=None, type=float)
     parser.add_argument('--optim_warm_start', action='store_true', default=False)
     parser.add_argument('--optim_print', action='store_true', default=False)
