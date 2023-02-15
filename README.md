@@ -1,7 +1,7 @@
 # Universal Guidance for Diffusion Models
 <img src="./stable-diffusion-guided/data/images/all_cover_figure.png" width="1000px"></img>
 
-The official PyTorch implementation of Universal Guidance for Diffusion Models. 
+The official PyTorch implementation of <a href="https://arxiv.org/abs/2302.07121">Universal Guidance for Diffusion Models</a>. 
 This repository has python implementation of universal guidance algorithm that enables controlling diffusion models by arbitrary guidance modalities without the need to retrain any use-specific components.
 Different guidance modalities we demonstrate are Human Identity, Segmentation Maps, Object Location, Image Style and Clip.
 Our implementation is based on the text-to-img model from <a href="https://github.com/CompVis/stable-diffusion">Stable Diffusion</a> and Imagenet Diffusion Model from <a href="https://github.com/openai/guided-diffusion">OpenAI's guided diffusion</a>.
