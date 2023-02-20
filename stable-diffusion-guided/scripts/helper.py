@@ -71,6 +71,48 @@ def get_face_text(text_type):
         prompt = "A headshot of a blonde woman as a japanese painting"
     elif text_type == 19:
         prompt = "A headshot of a blonde woman as oil painting"
+
+    # Tom and Arpit and Jonas and Micah
+    elif text_type == 20:
+        prompt = "A headshot of a statue of a man"
+    elif text_type == 21:
+        prompt = "A statue of a man"
+    elif text_type == 22:
+        prompt = "A headshot of a man as a nerd with glasses"
+    elif text_type == 23:
+        prompt = "A headshot of a man with black hair as a nerd with glasses"
+    elif text_type == 24:
+        prompt = "A headshot of a man with a face tattoo"
+    elif text_type == 25:
+        prompt = "A headshot of a man as an astronaut"
+    elif text_type == 26:
+        prompt = "A headshot of a man as a zombie"
+    elif text_type == 27:
+        prompt = "A headshot of a happy man"
+    elif text_type == 28:
+        prompt = "A headshot of a lonely man"
+    elif text_type == 29:
+        prompt = "A headshot of a sad man"
+    elif text_type == 30:
+        prompt = "A headshot of a surprised man"
+    elif text_type == 31:
+        prompt = "A headshot of a man as a pirate with an eye patch"
+
+
+    elif text_type == 32:
+        prompt = "A headshot of a man made of marble"
+    elif text_type == 33:
+        prompt = "A headshot of a man with black hair made of marble"
+    elif text_type == 34:
+        prompt = "A headshot of a 60 year old man"
+    elif text_type == 35:
+        prompt = "A headshot of a man as a sketch"
+    elif text_type == 36:
+        prompt = "A headshot of a man as oil painting"
+
+
+
+
     else:
         prompt = ""
 

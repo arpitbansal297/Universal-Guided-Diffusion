@@ -4,7 +4,6 @@ import os
 import cv2
 import os
 import errno
-from helper import get_face_text
 
 def create_folder(path):
     try:
@@ -34,23 +33,9 @@ parser.add_argument('--deep_face_model', type=str, default="VGG-Face")
 opt = parser.parse_args()
 
 res_folder = opt.main_folder + "all_top_k/"
-create_folder(res_folder)
-if opt.img_index == 0:
-    res_folder = res_folder + "tomg_1/"
-elif opt.img_index == 1:
-    res_folder = res_folder + "arpit/"
-elif opt.img_index == 2:
-    res_folder = res_folder + "jonas/"
-elif opt.img_index == 3:
-    res_folder = res_folder + "tomg_2/"
-elif opt.img_index == 4:
-    res_folder = res_folder + "micah/"
-create_folder(res_folder)
-
 folder = opt.main_folder + opt.sub_folder + "/"
+create_folder(res_folder)
 
-text_num = opt.sub_folder.split("_")[-1]
-prompt = get_face_text(int(text_num))
 
 
 file_name = res_folder + opt.sub_folder + "_" + opt.result_file
@@ -98,4 +83,4 @@ with open(file_name, "w") as file:
         best_imgs.append(img)
 
     best_imgs = cv2.hconcat(best_imgs)
-    cv2.imwrite(f'{res_folder}/all_{prompt}_{text_num}.png', best_imgs)
+    cv2.imwrite(f'{res_folder}/all_{opt.sub_folder}_{img_index}.png', best_imgs)
