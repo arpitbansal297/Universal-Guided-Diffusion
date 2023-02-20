@@ -50,11 +50,11 @@ parser.add_argument('--wandb', type=int, default=1)
 parser.add_argument('--input_size', type=int, default=64)
 
 parser.add_argument("--optim_lr", default=1e-2, type=float)
-parser.add_argument('--optim_max_iters', type=int, default=0)
+parser.add_argument('--optim_backward_guidance_max_iters', type=int, default=0)
 parser.add_argument("--optim_loss_cutoff", default=0.00001, type=float)
-parser.add_argument('--optim_guidance_3', action='store_true', default=False)
+parser.add_argument('--optim_forward_guidance', action='store_true', default=False)
 parser.add_argument('--optim_original_conditioning', action='store_true', default=False)
-parser.add_argument("--optim_guidance_3_wt", default=2.0, type=float)
+parser.add_argument("--optim_forward_guidance_wt", default=2.0, type=float)
 parser.add_argument("--optim_tv_loss", default=None, type=float)
 parser.add_argument('--optim_warm_start', action='store_true', default=False)
 parser.add_argument('--optim_print', action='store_true', default=False)
@@ -123,14 +123,14 @@ operation.lr = args.optim_lr #0.01
 operation.loss_func = l_func
 operation.other_criterion = None
 
-operation.max_iters = args.optim_max_iters #00
+operation.max_iters = args.optim_backward_guidance_max_iters #00
 operation.loss_cutoff = args.optim_loss_cutoff #0.00001
 operation.tv_loss = args.optim_tv_loss
 
-operation.guidance_3 = args.optim_guidance_3 #True
+operation.guidance_3 = args.optim_forward_guidance #True
 operation.original_guidance = args.optim_original_conditioning
 
-operation.optim_guidance_3_wt = args.optim_guidance_3_wt
+operation.optim_guidance_3_wt = args.optim_forward_guidance_wt
 
 operation.warm_start = args.optim_warm_start #False
 operation.print = args.optim_print

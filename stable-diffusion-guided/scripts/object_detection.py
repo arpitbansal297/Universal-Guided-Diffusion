@@ -146,10 +146,10 @@ def get_optimation_details(args):
     operation.max_iters = args.optim_max_iters
     operation.loss_cutoff = args.optim_loss_cutoff
 
-    operation.guidance_3 = args.optim_guidance_3
-    operation.guidance_2 = args.optim_guidance_2
+    operation.guidance_3 = args.optim_forward_guidance
+    operation.guidance_2 = args.optim_backward_guidance
 
-    operation.optim_guidance_3_wt = args.optim_guidance_3_wt
+    operation.optim_guidance_3_wt = args.optim_forward_guidance_wt
     operation.original_guidance = args.optim_original_conditioning
 
     operation.warm_start = args.optim_warm_start
@@ -233,11 +233,11 @@ def main():
     parser.add_argument('--optim_max_iters', type=int, default=1)
     parser.add_argument('--optim_mask_type', type=int, default=1)
     parser.add_argument("--optim_loss_cutoff", default=0.00001, type=float)
-    parser.add_argument('--optim_guidance_3', action='store_true', default=False)
-    parser.add_argument('--optim_guidance_2', action='store_true', default=False)
+    parser.add_argument('--optim_forward_guidance', action='store_true', default=False)
+    parser.add_argument('--optim_backward_guidance', action='store_true', default=False)
     parser.add_argument('--optim_original_conditioning', action='store_true', default=False)
-    parser.add_argument("--optim_guidance_3_wt", default=5.0, type=float)
-    parser.add_argument('--optim_do_guidance_3_norm', action='store_true', default=False)
+    parser.add_argument("--optim_forward_guidance_wt", default=5.0, type=float)
+    parser.add_argument('--optim_do_forward_guidance_norm', action='store_true', default=False)
     parser.add_argument("--optim_tv_loss", default=None, type=float)
     parser.add_argument('--optim_warm_start', action='store_true', default=False)
     parser.add_argument('--optim_print', action='store_true', default=False)
@@ -245,8 +245,9 @@ def main():
     parser.add_argument('--optim_folder', default='./temp/')
     parser.add_argument("--optim_num_steps", nargs="+", default=[1], type=int)
     parser.add_argument("--optim_mask_fraction", default=0.5, type=float)
-    parser.add_argument('--text_type', type=int, default=1)
+    parser.add_argument('--text', default=None)
     parser.add_argument("--trials", type=int, default=10)
+    parser.add_argument("--indexes", nargs="+", default=[0, 1, 2], type=int)
 
     opt = parser.parse_args()
 
@@ -273,19 +274,16 @@ def main():
 
     torch.set_grad_enabled(False)
 
-    if opt.text_type == 1:
+    if opt.text is not None:
+        prompt = opt.text
+    else:
         prompt = "a headshot of a woman with a dog"
-        obj_det_cats = ["dog", "person"]
-        test_anchor_locs = [(128.0, 256.0), (384.0, 256.0)]
-        sizes = [180, [200,400]]
-    
+
 
     print(prompt)
     
     # Setup for object detection
 
-    obj_categories = operation.operation_func.categories
-    category = [obj_categories.index(cc) for cc in obj_det_cats]
 
     def gen_box(num_image, anchor_locs, label, sizes):
 
@@ -317,40 +315,58 @@ def main():
         box = box.float() / 255.0
         box = box * 2 - 1
         return box
-
-
-    og_img_guide = gen_box(opt.n_samples, test_anchor_locs, category, sizes)
-
-
-
-    tic = time.time()
-    all_samples = list()
-
-    for n in trange(opt.trials, desc="Sampling"):
-
-        uc = None
-        if opt.scale != 1.0:
-            uc = model.module.get_learned_conditioning(batch_size * [""])
-        c = model.module.get_learned_conditioning([prompt])
-
-        shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
-        samples_ddim = sampler.sample_seperate(S=opt.ddim_steps,
-                                         conditioning=c,
-                                         batch_size=opt.n_samples,
-                                         shape=shape,
-                                         verbose=False,
-                                         unconditional_guidance_scale=opt.scale,
-                                         unconditional_conditioning=uc,
-                                         eta=opt.ddim_eta,
-                                         operated_image=og_img_guide,
-                                         operation=operation)
-
-        x_samples_ddim = model.module.decode_first_stage(samples_ddim)
-        x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
-
-        utils.save_image(x_samples_ddim, f'{results_folder}/new_img_{n}.png')
-        box_original_output = draw_box(x_samples_ddim[0].detach(), og_img_guide[0])
-        img_ = return_cv2(box_original_output, f'{results_folder}/box_new_img_{n}.png')
+    
+    
+    for index in opt.indexes:
+        
+        print(f'current bounding box:{index}')
+        # Change the bounding box definition here
+        if index == 0:
+            obj_det_cats = ["dog", "person"]
+            test_anchor_locs = [(128.0, 256.0), (384.0, 256.0)]
+            sizes = [180, [200,400]]
+        elif index == 1:
+            obj_det_cats = ["person", "dog"]
+            test_anchor_locs = [(128.0, 256.0), (384.0, 256.0)]
+            sizes = [[200,400], 180]
+        elif index == 2:
+            obj_det_cats = ["dog", "person"]
+            test_anchor_locs = [(150.0, 384.0), (384.0, 256.0)]
+            sizes = [[275,200], [200,400]]
+    
+    
+        obj_categories = operation.operation_func.categories
+        category = [obj_categories.index(cc) for cc in obj_det_cats]
+        og_img_guide = gen_box(opt.n_samples, test_anchor_locs, category, sizes)
+    
+        tic = time.time()
+        all_samples = list()
+    
+        for n in trange(opt.trials, desc="Sampling"):
+ 
+            uc = None
+            if opt.scale != 1.0:
+                uc = model.module.get_learned_conditioning(batch_size * [""])
+            c = model.module.get_learned_conditioning([prompt])
+    
+            shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
+            samples_ddim = sampler.sample_seperate(S=opt.ddim_steps,
+                                            conditioning=c,
+                                            batch_size=opt.n_samples,
+                                            shape=shape,
+                                            verbose=False,
+                                            unconditional_guidance_scale=opt.scale,
+                                            unconditional_conditioning=uc,
+                                            eta=opt.ddim_eta,
+                                            operated_image=og_img_guide,
+                                            operation=operation)
+    
+            x_samples_ddim = model.module.decode_first_stage(samples_ddim)
+            x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
+    
+            utils.save_image(x_samples_ddim, f'{results_folder}/new_img_{n}.png')
+            box_original_output = draw_box(x_samples_ddim[0].detach(), og_img_guide[0])
+            img_ = return_cv2(box_original_output, f'{results_folder}/box_new_img_{n}.png')
 
 
 if __name__ == "__main__":
