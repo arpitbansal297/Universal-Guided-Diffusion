@@ -394,7 +394,7 @@ def main():
 
     image_size = 256
     transform = transforms.Compose([
-        transforms.CenterCrop(image_size),
+        transforms.Resize((image_size, image_size)),
         transforms.ToTensor(),
         transforms.Lambda(lambda t: (t * 2) - 1)
     ])
