@@ -6,7 +6,8 @@ from tqdm import tqdm
 from functools import partial
 import GPUtil
 from torchvision import transforms, utils
-
+from random import randrange
+import torch.nn.functional as F
 
 from ldm.modules.diffusionmodules.util import make_ddim_sampling_parameters, make_ddim_timesteps, noise_like, \
     extract_into_tensor
@@ -221,6 +222,213 @@ class DDIMSamplerWithGrad(object):
 
 
         return img, start_zt
+
+
+    def sample_inverse(self,
+               S,
+               batch_size,
+               shape,
+               start_image=None,
+               conditioning=None,
+               eta=0.,
+               temperature=1.,
+               verbose=True,
+               unconditional_guidance_scale=1.,
+               unconditional_conditioning=None
+               ):
+
+
+        self.make_schedule(ddim_num_steps=S, ddim_eta=eta, verbose=verbose)
+        # sampling
+        C, H, W = shape
+        shape = (batch_size, C, H, W)
+        cond = conditioning
+
+
+        device = self.model.module.betas.device
+        b = shape[0]
+
+        if start_image is None:
+            img = torch.randn(shape, device=device)
+        else:
+            encoder_posterior = self.model.module.encode_first_stage(start_image)
+            img = self.model.module.get_first_stage_encoding(encoder_posterior).detach()
+
+        timesteps = self.ddim_timesteps
+        # time_range = np.flip(timesteps)
+        time_range = timesteps
+        total_steps = timesteps.shape[0]
+
+        iterator = tqdm(time_range, desc='DDIM Sampler', total=total_steps)
+
+        alphas = self.ddim_alphas
+        alphas_prev = self.ddim_alphas_prev
+
+        a_curr = torch.full((b, 1, 1, 1), alphas_prev[0], device=device)
+        img = a_curr.sqrt() * img + (1. - a_curr).sqrt() * torch.randn_like(img)
+
+        for param in self.model.module.first_stage_model.parameters():
+            param.requires_grad = False
+
+        num_reg_steps = 5
+        lambda_ac = 20.0
+        num_ac_rolls = 5
+        lambda_kl = 20.0
+
+        for i, step in enumerate(iterator):
+            index = i
+            # index = total_steps - i - 1
+
+            ts = torch.full((b,), step, device=device, dtype=torch.long)
+
+            b, *_, device = *img.shape, img.device
+
+            # select parameters corresponding to the currently considered timestep
+            a_curr = torch.full((b, 1, 1, 1), alphas_prev[index], device=device)
+            a_next = torch.full((b, 1, 1, 1), alphas[index], device=device)
+
+            # print(a_curr, a_next, ts)
+            # # exit()
+
+            with torch.no_grad():
+                x_in = torch.cat([img] * 2)
+                t_in = torch.cat([ts] * 2)
+                c_in = torch.cat([unconditional_conditioning, cond])
+                e_t_uncond, e_t = self.model.module.apply_model(x_in, t_in, c_in).chunk(2)
+                e_t = e_t_uncond + unconditional_guidance_scale * (e_t - e_t_uncond)
+
+            # torch.set_grad_enabled(True)
+            # for _outer in range(num_reg_steps):
+            #     if lambda_ac > 0:
+            #         for _inner in range(num_ac_rolls):
+            #             _var = e_t.detach().requires_grad_(True)
+            #             l_ac = self.auto_corr_loss(_var)
+            #             l_ac.backward()
+            #             _grad = _var.grad.detach() / num_ac_rolls
+            #             e_t = e_t - lambda_ac * _grad
+            #
+            #     if lambda_kl > 0:
+            #         _var = e_t.detach().requires_grad_(True)
+            #         l_kld = self.kl_divergence(_var)
+            #         l_kld.backward()
+            #         _grad = _var.grad.detach()
+            #         e_t = e_t - lambda_kl * _grad
+            #     e_t = e_t.detach()
+            #
+            # torch.set_grad_enabled(False)
+
+            with torch.no_grad():
+                # current prediction for x_0
+                pred_x0 = (img - (1. - a_curr).sqrt() * e_t) / a_curr.sqrt()
+                # direction pointing to x_t
+                img = a_next.sqrt() * pred_x0 + (1. - a_next).sqrt() * e_t
+
+                del pred_x0
+
+
+        return img
+
+
+    def sample_forward(self,
+               S,
+               batch_size,
+               shape,
+               start_zt=None,
+               conditioning=None,
+               eta=0.,
+               temperature=1.,
+               verbose=True,
+               unconditional_guidance_scale=1.,
+               unconditional_conditioning=None
+               ):
+
+
+        self.make_schedule(ddim_num_steps=S, ddim_eta=eta, verbose=verbose)
+        # sampling
+        C, H, W = shape
+        shape = (batch_size, C, H, W)
+        cond = conditioning
+
+
+        device = self.model.module.betas.device
+        b = shape[0]
+
+        if start_zt is None:
+            img = torch.randn(shape, device=device)
+            start_zt = img
+        else:
+            img = start_zt
+
+        timesteps = self.ddim_timesteps
+        time_range = np.flip(timesteps)
+        total_steps = timesteps.shape[0]
+
+        iterator = tqdm(time_range, desc='DDIM Sampler', total=total_steps)
+
+        alphas = self.ddim_alphas
+        alphas_prev = self.ddim_alphas_prev
+        sqrt_one_minus_alphas = self.ddim_sqrt_one_minus_alphas
+
+        for param in self.model.module.first_stage_model.parameters():
+            param.requires_grad = False
+
+
+        for i, step in enumerate(iterator):
+            index = total_steps - i - 1
+            ts = torch.full((b,), step, device=device, dtype=torch.long)
+
+            b, *_, device = *img.shape, img.device
+
+            # select parameters corresponding to the currently considered timestep
+            a_t = torch.full((b, 1, 1, 1), alphas[index], device=device)
+            a_prev = torch.full((b, 1, 1, 1), alphas_prev[index], device=device)
+            sqrt_one_minus_at = torch.full((b, 1, 1, 1), sqrt_one_minus_alphas[index], device=device)
+
+            # # exit()
+
+            with torch.no_grad():
+                x_in = torch.cat([img] * 2)
+                t_in = torch.cat([ts] * 2)
+                c_in = torch.cat([unconditional_conditioning, cond])
+                e_t_uncond, e_t = self.model.module.apply_model(x_in, t_in, c_in).chunk(2)
+                e_t = e_t_uncond + unconditional_guidance_scale * (e_t - e_t_uncond)
+
+                # current prediction for x_0
+                pred_x0 = (img - sqrt_one_minus_at * e_t) / a_t.sqrt()
+                # direction pointing to x_t
+                img = a_prev.sqrt() * pred_x0 + (1. - a_prev).sqrt() * e_t
+
+                del pred_x0
+
+
+        return img
+
+
+
+    def auto_corr_loss(self, x, random_shift=True):
+        B, C, H, W = x.shape
+        assert B == 1
+        x = x.squeeze(0)
+        # x must be shape [C,H,W] now
+        reg_loss = 0.0
+        for ch_idx in range(x.shape[0]):
+            noise = x[ch_idx][None, None, :, :]
+            while True:
+                if random_shift:
+                    roll_amount = randrange(noise.shape[2] // 2)
+                else:
+                    roll_amount = 1
+                reg_loss += (noise * torch.roll(noise, shifts=roll_amount, dims=2)).mean() ** 2
+                reg_loss += (noise * torch.roll(noise, shifts=roll_amount, dims=3)).mean() ** 2
+                if noise.shape[2] <= 8:
+                    break
+                noise = F.avg_pool2d(noise, kernel_size=2)
+        return reg_loss
+
+    def kl_divergence(self, x):
+        _mu = x.mean()
+        _var = x.var()
+        return _var + _mu ** 2 - 1 - torch.log(_var + 1e-7)
 
 
     def sample_seperate(self,
